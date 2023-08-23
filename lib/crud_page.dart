@@ -173,7 +173,15 @@ class _CrudPageState extends State<CrudPage> {
                 itemWidgets.add(
                   ListTile(
                     leading: _selectedCollection == 'Medicine'
-                        ? Image.network(field1)
+                        ? Container(
+                            width: 50, // Set your desired width
+                            height: 50, // Set your desired height
+                            child: Image.network(
+                              field1,
+                              fit: BoxFit
+                                  .cover, // Adjust the fit based on your needs
+                            ),
+                          )
                         : const Icon(Icons.info),
                     title: Text(
                         _selectedCollection == 'SkinDisease' ? field3 : field2),
