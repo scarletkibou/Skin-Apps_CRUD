@@ -18,6 +18,8 @@ class _CrudPageState extends State<CrudPage> {
   final TextEditingController _usageController = TextEditingController();
   final TextEditingController _medicineReferencesController =
       TextEditingController();
+  bool _sortAscending = true;
+  String _medicineSearchQuery = '';
 
   String _selectedCollection = 'Medicine';
   List<String> _selectedMedicineReferences = [];
@@ -33,7 +35,7 @@ class _CrudPageState extends State<CrudPage> {
         indicator: SplitIndicator(viewMode: SplitViewMode.Horizontal),
         controller: SplitViewController(limits: [null, WeightLimit(max: 0.8)]),
         children: [
-          // Left Side
+          // Left
           Padding(
             padding: EdgeInsets.all(16.0),
             child: Column(
@@ -44,6 +46,7 @@ class _CrudPageState extends State<CrudPage> {
                   onChanged: (newValue) {
                     setState(() {
                       _selectedCollection = newValue!;
+                      _medicineSearchQuery = '';
                     });
                   },
                   items: ['Medicine', 'SkinDisease']
@@ -86,6 +89,30 @@ class _CrudPageState extends State<CrudPage> {
                     decoration: InputDecoration(labelText: 'Symptom'),
                   ),
                 if (_selectedCollection == 'SkinDisease')
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Search for Medicines',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                        ),
+                      ),
+                      TextField(
+                        onChanged: (value) {
+                          setState(() {
+                            _medicineSearchQuery = value;
+                          });
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Search Medicine',
+                          prefixIcon: Icon(Icons.search),
+                        ),
+                      ),
+                    ],
+                  ),
+                if (_selectedCollection == 'SkinDisease')
                   Expanded(
                     child: StreamBuilder<QuerySnapshot>(
                       stream: _firestore.collection('Medicine').snapshots(),
@@ -100,6 +127,12 @@ class _CrudPageState extends State<CrudPage> {
                         for (var medicine in medicines) {
                           String medicineId = medicine.id;
                           String medicineName = medicine['name'];
+
+                          if (_medicineSearchQuery.isNotEmpty &&
+                              !medicineName.toLowerCase().contains(
+                                  _medicineSearchQuery.toLowerCase())) {
+                            continue;
+                          }
 
                           medicineWidgets.add(
                             ListTile(
@@ -123,6 +156,17 @@ class _CrudPageState extends State<CrudPage> {
                           );
                         }
 
+                        // Sort the medicineWidgets list
+                        medicineWidgets.sort((a, b) {
+                          String titleA = (a as ListTile).title.toString();
+                          String titleB = (b as ListTile).title.toString();
+                          return titleA.compareTo(titleB);
+                        });
+
+                        if (!_sortAscending) {
+                          medicineWidgets = medicineWidgets.reversed.toList();
+                        }
+
                         return ListView(
                           children: medicineWidgets,
                         );
@@ -144,7 +188,7 @@ class _CrudPageState extends State<CrudPage> {
             ),
           ),
 
-          // Right Side
+          // Right
           StreamBuilder<QuerySnapshot>(
             stream: _firestore.collection(_selectedCollection).snapshots(),
             builder: (context, snapshot) {
@@ -174,12 +218,11 @@ class _CrudPageState extends State<CrudPage> {
                   ListTile(
                     leading: _selectedCollection == 'Medicine'
                         ? Container(
-                            width: 50, // Set your desired width
-                            height: 50, // Set your desired height
+                            width: 50,
+                            height: 50,
                             child: Image.network(
                               field1,
-                              fit: BoxFit
-                                  .cover, // Adjust the fit based on your needs
+                              fit: BoxFit.cover,
                             ),
                           )
                         : const Icon(Icons.info),
@@ -211,6 +254,15 @@ class _CrudPageState extends State<CrudPage> {
                   ),
                 );
               }
+              itemWidgets.sort((a, b) {
+                String titleA = (a as ListTile).title.toString();
+                String titleB = (b as ListTile).title.toString();
+                return titleA.compareTo(titleB);
+              });
+
+              if (!_sortAscending) {
+                itemWidgets = itemWidgets.reversed.toList();
+              }
 
               return ListView(
                 children: itemWidgets,
@@ -222,8 +274,28 @@ class _CrudPageState extends State<CrudPage> {
     );
   }
 
-  void _addItem() {
+  void _toggleSort() {
+    setState(() {
+      _sortAscending = !_sortAscending;
+    });
+  }
+
+  void _addItem() async {
     if (_selectedCollection == 'SkinDisease') {
+      final existingItems = await _firestore
+          .collection(_selectedCollection)
+          .where('disease_name', isEqualTo: _field3Controller.text)
+          .get();
+
+      if (existingItems.docs.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Disease with the same name already exists.'),
+          ),
+        );
+        return;
+      }
+
       List<String> medicineReferences = _selectedMedicineReferences.toList();
 
       _firestore.collection(_selectedCollection).add({
@@ -236,6 +308,20 @@ class _CrudPageState extends State<CrudPage> {
 
       _selectedMedicineReferences.clear();
     } else if (_selectedCollection == 'Medicine') {
+      final existingItems = await _firestore
+          .collection(_selectedCollection)
+          .where('name', isEqualTo: _field2Controller.text)
+          .get();
+
+      if (existingItems.docs.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Medicine with the same name already exists.'),
+          ),
+        );
+        return;
+      }
+
       _firestore.collection(_selectedCollection).add({
         'image': _field1Controller.text,
         'name': _field2Controller.text,
@@ -248,6 +334,7 @@ class _CrudPageState extends State<CrudPage> {
     _field2Controller.clear();
     _field3Controller.clear();
     _field4Controller.clear();
+    _sortAscending = true;
   }
 
   void _editItem(String itemId) {
